@@ -93,11 +93,12 @@ class FourFlySimpleSDK {
   async _loadUserClub() {
     if (!this.currentUser) return;
 
+    // Le schéma utilise 'status' = 'ACTIVE' (et pas 'is_active')
     const { data, error } = await this.supabase
       .from("club_members")
-      .select("club_id, clubs(name)")
+      .select("club_id")
       .eq("user_id", this.currentUser.id)
-      .eq("is_active", true)
+      .eq("status", "ACTIVE")
       .single();
 
     if (!error && data) {
@@ -156,23 +157,20 @@ class FourFlySimpleSDK {
         id,
         date,
         duration,
-        userId,
-        aircraftId,
+        user_id,
+        aircraft_id,
         destination,
         fuel_added_before,
         fuel_added_after,
         landings,
-        aircraft:aircraftId(
+        aircraft:aircraft_id(
           id,
           name,
           registration,
           type,
-          fuel_types!fuel_type_id(
-            name,
-            emission_factor
-          )
+          capacity
         ),
-        users:userId(
+        users:user_id(
           first_name,
           last_name
         )
@@ -202,18 +200,20 @@ class FourFlySimpleSDK {
       id: flight.id,
       date: flight.date,
       duration: flight.duration,
-      pilot_id: flight.userId,
+      pilot_id: flight.user_id,
       pilot_name: flight.users
         ? `${flight.users.first_name} ${flight.users.last_name}`
         : "N/A",
-      aircraft_id: flight.aircraftId,
+      aircraft_id: flight.aircraft_id,
       aircraft_name: flight.aircraft?.name || "Avion",
       aircraft_registration: flight.aircraft?.registration || "",
+      aircraft_type: flight.aircraft?.type || null,
+      aircraft_capacity: flight.aircraft?.capacity ?? null,
       destination: flight.destination,
       fuel_used:
         (flight.fuel_added_before || 0) + (flight.fuel_added_after || 0),
       landings: flight.landings,
-      emission_factor: flight.aircraft?.fuel_types?.emission_factor || 2.31,
+      emission_factor: 2.31,
     }));
   }
 

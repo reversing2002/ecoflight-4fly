@@ -31,6 +31,132 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Endpoint pour recevoir le token 4Fly après connexion
+app.post("/auth/4fly-login", async (req, res) => {
+  try {
+    const { token, club_id, reason } = req.body || {};
+    if (!token)
+      return res.status(400).json({ success: false, error: "token requis" });
+
+    // Log d'arrivée de token (masque la majorité du JWT)
+    try {
+      const preview =
+        typeof token === "string" ? `${token.slice(0, 12)}…` : "(invalid)";
+      console.log(
+        `🔐 [EcoFlight] Token reçu | reason=${reason || "login"} club=${
+          club_id || "N/A"
+        } token=${preview}`
+      );
+    } catch (_) {}
+
+    const sdk = new FourFlySimpleSDK(SDK_CONFIG);
+    const result = await sdk.setUserToken(token);
+    if (!result.success) {
+      return res.status(401).json({ success: false, error: "JWT invalide" });
+    }
+
+    // Optionnel: vérifier que l'app est installée pour ce club
+    if (club_id) {
+      const installed = await sdk.isAppInstalled("ecoflight");
+      if (!installed) {
+        return res
+          .status(403)
+          .json({ success: false, error: "App non installée pour ce club" });
+      }
+    }
+
+    // Log succès avec identité utilisateur masquée/compacte
+    try {
+      const email = result?.user?.email || result?.user?.id || "unknown-user";
+      console.log(
+        `✅ [EcoFlight] Auth OK | user=${email} club=${
+          club_id || "N/A"
+        } reason=${reason || "login"}`
+      );
+    } catch (_) {}
+
+    // Répondre OK; l'app peut créer des cookies de session si nécessaire
+    return res.json({ success: true, reason: reason || "login" });
+  } catch (e) {
+    console.error("/auth/4fly-login error:", e);
+    return res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+
+// Page embarquable (iframe) qui récupère le token via postMessage
+app.get("/embed", (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>EcoFlight - Embed</title>
+      <style>
+        body { margin: 0; font-family: Arial, sans-serif; }
+        .header { padding: 12px 16px; background: #0e7a0d; color: white; font-weight: 600; }
+        .content { padding: 16px; }
+        .error { color: #b91c1c; }
+        .muted { color: #6b7280; }
+        .card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      </style>
+    </head>
+    <body>
+      <div class="header">🌱 EcoFlight – Analyse Carbone (Embed)</div>
+      <div class="content">
+        <div id="status" class="muted">En attente d'authentification…</div>
+        <div id="root" style="margin-top: 12px;"></div>
+      </div>
+      <script>
+        let bearer = null;
+        let clubId = null;
+        function masked(tok){return (tok||'').slice(0,12)+'…'}
+        window.addEventListener('message', async (event) => {
+          try {
+            const data = event.data || {};
+            if (data.type !== '4fly-auth' || !data.token) return;
+            bearer = data.token;
+            clubId = data.club_id || null;
+            document.getElementById('status').textContent = 'Authentifié (token '+masked(bearer)+')';
+            await load();
+          } catch (e) {
+            document.getElementById('status').innerHTML = '<span class="error">Erreur auth: '+e.message+'</span>';
+          }
+        });
+        async function load(){
+          try {
+            const resp = await fetch('/api/carbon-analysis', {
+              headers: { 'Authorization': 'Bearer '+bearer }
+            });
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error||'Erreur API');
+            const total = (data.stats && data.stats.total_co2 != null) ? Number(data.stats.total_co2).toFixed(1) : '-';
+            const flights = Array.isArray(data.flights) ? data.flights : [];
+            const items = flights.slice(0,5).map(function(f){
+              try {
+                var v = (f.co2_kg != null) ? Number(f.co2_kg).toFixed(1) : '-';
+                return '<li>'+ (f.date||'') +' – '+ (f.aircraft_name||'') +' – '+ v +' kg</li>';
+              } catch (e) {
+                return '<li>'+ (f.date||'') +' – '+ (f.aircraft_name||'') +'</li>';
+              }
+            }).join('');
+            document.getElementById('root').innerHTML =
+              '<div class="card">'
+              + '<div style="font-weight:600; margin-bottom:8px;">Synthèse</div>'
+              + '<div>CO₂ total estimé: <strong>' + total + ' kg</strong></div>'
+              + '<div style="margin-top:12px; font-weight:600;">Derniers vols analysés</div>'
+              + '<ul style="margin:8px 0 0 16px; padding:0;">' + items + '</ul>'
+              + '</div>';
+          } catch(e){
+            document.getElementById('root').innerHTML = '<div class="error">'+e.message+'</div>';
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
 // Calculateur de compensation carbone
 class CarbonCalculator {
   static calculateCO2(fuelUsed, emissionFactor = 2.31) {
@@ -353,7 +479,7 @@ app.get("/dashboard", (req, res) => {
                             <div class="flight-item">
                                 <div class="flight-info">
                                     <h4>\${flight.date} - \${flight.aircraft_name}</h4>
-                                    <small>Pilote: \${flight.pilot_name} | \${flight.destination || 'Local'} (\${flight.duration}h, \${flight.fuel_used.toFixed(1)}L)</small>
+                                    <small>Pilote: \${flight.pilot_name} | \${flight.destination || 'Local'} (\${flight.duration}min, \${flight.fuel_used.toFixed(1)}L)</small>
                                 </div>
                                 <div class="carbon-info">
                                     <div class="carbon-value" style="color: \${level.color}">
@@ -427,8 +553,20 @@ app.get("/api/carbon-analysis", authenticateUser, async (req, res) => {
 
     // Calculer l'analyse carbone pour chaque vol
     const analysisFlights = flights.map((flight) => {
+      // Déterminer le débit conso (l/h): 33 l/h pour 4 places (100LL), 15 l/h pour ULM/2 places (SP98)
+      const seats = flight.aircraft_capacity || null;
+      const type = (flight.aircraft_type || "").toUpperCase();
+      const isFourSeats = seats && seats >= 4;
+      const isUltralightOrTwoSeats = type === "ULM" || (seats && seats <= 2);
+
+      const litersPerHour = isFourSeats ? 33 : isUltralightOrTwoSeats ? 15 : 33;
+
+      // La durée en base est en minutes; convertir en heures
+      const hours = (flight.duration || 0) / 60;
+      const fuel_estimated = litersPerHour * hours;
+
       const co2_kg = CarbonCalculator.calculateCO2(
-        flight.fuel_used,
+        fuel_estimated,
         flight.emission_factor
       );
       const offset_cost = CarbonCalculator.calculateOffsetCost(co2_kg);
@@ -436,6 +574,7 @@ app.get("/api/carbon-analysis", authenticateUser, async (req, res) => {
 
       return {
         ...flight,
+        fuel_estimated,
         co2_kg,
         offset_cost,
         emission_level,
