@@ -3,10 +3,10 @@
  * Version Sans Base de Données - Lecture seule des données 4Fly
  * Calculs de compensation en temps réel
  */
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const FourFlySimpleSDK = require('./fourfly-simple-sdk');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const FourFlySimpleSDK = require("./fourfly-simple-sdk");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,14 +14,20 @@ const PORT = process.env.PORT || 3001;
 // Configuration SDK
 const SDK_CONFIG = {
   supabaseUrl: process.env.SUPABASE_URL,
-  supabaseAnonKey: process.env.SUPABASE_ANON_KEY
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
 };
 
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:5173', 'https://app.4fly.io', process.env.FRONTEND_URL],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://app.4fly.io",
+      process.env.FRONTEND_URL,
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -30,39 +36,46 @@ class CarbonCalculator {
   static calculateCO2(fuelUsed, emissionFactor = 2.31) {
     return fuelUsed * emissionFactor;
   }
-  
+
   static calculateOffsetCost(co2Kg, pricePerTonne = 25) {
     return (co2Kg / 1000) * pricePerTonne;
   }
-  
+
   static getEmissionLevel(co2Kg) {
-    if (co2Kg > 50) return { level: 'high', color: '#f44336', label: 'Élevé' };
-    if (co2Kg > 20) return { level: 'medium', color: '#ff9800', label: 'Moyen' };
-    return { level: 'low', color: '#4CAF50', label: 'Faible' };
+    if (co2Kg > 50) return { level: "high", color: "#f44336", label: "Élevé" };
+    if (co2Kg > 20)
+      return { level: "medium", color: "#ff9800", label: "Moyen" };
+    return { level: "low", color: "#4CAF50", label: "Faible" };
   }
-  
+
   static generateRecommendations(co2Kg) {
     const recommendations = [];
-    
+
     if (co2Kg > 30) {
-      recommendations.push('Considérez des vols plus courts pour réduire la consommation');
-      recommendations.push('Optimisez votre plan de vol pour économiser du carburant');
+      recommendations.push(
+        "Considérez des vols plus courts pour réduire la consommation"
+      );
+      recommendations.push(
+        "Optimisez votre plan de vol pour économiser du carburant"
+      );
     }
-    
+
     if (co2Kg > 10) {
-      recommendations.push('Compensez vos émissions avec des crédits carbone certifiés');
+      recommendations.push(
+        "Compensez vos émissions avec des crédits carbone certifiés"
+      );
     }
-    
-    recommendations.push('Partagez vos vols pour répartir les émissions');
-    
+
+    recommendations.push("Partagez vos vols pour répartir les émissions");
+
     return recommendations;
   }
 }
 
 // Route d'installation simplifiée
-app.get('/install', (req, res) => {
+app.get("/install", (req, res) => {
   const { club_id, return_url } = req.query;
-  
+
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -111,9 +124,9 @@ app.get('/install', (req, res) => {
   `);
 });
 
-app.post('/complete-install', async (req, res) => {
+app.post("/complete-install", async (req, res) => {
   const { club_id, return_url } = req.body;
-  
+
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -131,16 +144,18 @@ app.post('/complete-install', async (req, res) => {
         <div class="success">✅ Calculateur carbone prêt à l'emploi</div>
         <p>EcoFlight va analyser vos vols 4Fly et calculer leur impact carbone en temps réel.</p>
         <a href="/login?club_id=${club_id}" class="button">Commencer l'Analyse</a>
-        <a href="${return_url || 'https://app.4fly.io'}" class="button">Retour à 4Fly</a>
+        <a href="${
+          return_url || "https://app.4fly.io"
+        }" class="button">Retour à 4Fly</a>
     </body>
     </html>
   `);
 });
 
 // Page de connexion
-app.get('/login', (req, res) => {
+app.get("/login", (req, res) => {
   const { club_id, redirect } = req.query;
-  
+
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -205,34 +220,32 @@ app.get('/login', (req, res) => {
 });
 
 // Route d'authentification
-app.post('/auth/login', async (req, res) => {
+app.post("/auth/login", async (req, res) => {
   try {
     const { email, password, club_id } = req.body;
-    
+
     const sdk = new FourFlySimpleSDK(SDK_CONFIG);
     const loginResult = await sdk.signIn(email, password);
-    
+
     if (!loginResult.success) {
       return res.json({ success: false, error: loginResult.error });
     }
-    
-    const session = await sdk.supabase.auth.getSession();
-    
+
     res.json({
       success: true,
-      token: session.data.session?.access_token,
-      user: loginResult.user
+      token: loginResult.token,
+      user: loginResult.user,
     });
   } catch (error) {
-    console.error('Erreur connexion:', error);
+    console.error("Erreur connexion:", error);
     res.json({ success: false, error: error.message });
   }
 });
 
 // Dashboard EcoFlight - Calculateur pur
-app.get('/dashboard', (req, res) => {
+app.get("/dashboard", (req, res) => {
   const { token, club_id } = req.query;
-  
+
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -299,8 +312,8 @@ app.get('/dashboard', (req, res) => {
         </div>
 
         <script>
-            const token = '${token}';
-            const clubId = '${club_id}';
+            const token = '${token || ""}';
+            const clubId = '${club_id || ""}';
             
             async function loadDashboard() {
                 try {
@@ -370,7 +383,11 @@ app.get('/dashboard', (req, res) => {
             }
             
             // Charger au démarrage
-            loadDashboard();
+            if (!token) {
+                document.getElementById('flights-container').innerHTML = '<p style="color: red;">Token manquant. Veuillez vous reconnecter.</p>';
+            } else {
+                loadDashboard();
+            }
         </script>
     </body>
     </html>
@@ -380,56 +397,62 @@ app.get('/dashboard', (req, res) => {
 // Middleware d'authentification
 const authenticateUser = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
+    const token = req.headers.authorization?.replace("Bearer ", "");
+
     if (!token) {
-      return res.status(401).json({ error: 'Token d\'authentification requis' });
+      return res.status(401).json({ error: "Token d'authentification requis" });
     }
-    
+
     const sdk = new FourFlySimpleSDK(SDK_CONFIG);
     const result = await sdk.setUserToken(token);
-    
+
     if (!result.success) {
-      return res.status(401).json({ error: 'Token invalide' });
+      return res.status(401).json({ error: "Token invalide" });
     }
-    
+
     req.sdk = sdk;
     req.user = result.user;
     next();
   } catch (error) {
-    console.error('Erreur authentification:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error("Erreur authentification:", error);
+    res.status(500).json({ error: "Erreur serveur" });
   }
 };
 
 // API d'analyse carbone (calculateur pur)
-app.get('/api/carbon-analysis', authenticateUser, async (req, res) => {
+app.get("/api/carbon-analysis", authenticateUser, async (req, res) => {
   try {
     // Récupérer les vols avec données carbone calculées en temps réel
     const flights = await req.sdk.getFlightCarbonData({ limit: 50 });
-    
+
     // Calculer l'analyse carbone pour chaque vol
-    const analysisFlights = flights.map(flight => {
-      const co2_kg = CarbonCalculator.calculateCO2(flight.fuel_used, flight.emission_factor);
+    const analysisFlights = flights.map((flight) => {
+      const co2_kg = CarbonCalculator.calculateCO2(
+        flight.fuel_used,
+        flight.emission_factor
+      );
       const offset_cost = CarbonCalculator.calculateOffsetCost(co2_kg);
       const emission_level = CarbonCalculator.getEmissionLevel(co2_kg);
-      
+
       return {
         ...flight,
         co2_kg,
         offset_cost,
-        emission_level
+        emission_level,
       };
     });
-    
+
     // Calculer les statistiques globales
     const totalCO2 = analysisFlights.reduce((sum, f) => sum + f.co2_kg, 0);
     const avgCO2 = totalCO2 / Math.max(analysisFlights.length, 1);
-    const totalOffsetCost = analysisFlights.reduce((sum, f) => sum + f.offset_cost, 0);
-    
+    const totalOffsetCost = analysisFlights.reduce(
+      (sum, f) => sum + f.offset_cost,
+      0
+    );
+
     // Générer des recommandations basées sur les données
     const recommendations = CarbonCalculator.generateRecommendations(avgCO2);
-    
+
     res.json({
       success: true,
       user: req.user,
@@ -437,13 +460,13 @@ app.get('/api/carbon-analysis', authenticateUser, async (req, res) => {
         total_flights: analysisFlights.length,
         total_co2: totalCO2,
         avg_co2: avgCO2,
-        offset_cost: totalOffsetCost
+        offset_cost: totalOffsetCost,
       },
       flights: analysisFlights.slice(0, 20), // Limiter l'affichage
-      recommendations
+      recommendations,
     });
   } catch (error) {
-    console.error('Erreur analyse carbone:', error);
+    console.error("Erreur analyse carbone:", error);
     res.status(500).json({ error: error.message });
   }
 });
