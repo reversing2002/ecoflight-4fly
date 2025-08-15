@@ -9,7 +9,21 @@ const cors = require("cors");
 const FourFlySimpleSDK = require("./fourfly-simple-sdk");
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
+
+// Vérification des variables d'environnement critiques
+console.log("🔍 [EcoFlight] Vérification de la configuration...");
+console.log(`📍 PORT: ${PORT} ${process.env.PORT ? '(Railway)' : '(par défaut)'}`);
+console.log(`🔗 SUPABASE_URL: ${process.env.SUPABASE_URL ? 'OK' : 'MANQUANT'}`);
+console.log(`🔑 SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? 'OK' : 'MANQUANT'}`);
+console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+  console.error("❌ [EcoFlight] Variables d'environnement manquantes:");
+  console.error("   - SUPABASE_URL:", process.env.SUPABASE_URL ? "OK" : "MANQUANT");
+  console.error("   - SUPABASE_ANON_KEY:", process.env.SUPABASE_ANON_KEY ? "OK" : "MANQUANT");
+  process.exit(1);
+}
 
 // Configuration SDK
 const SDK_CONFIG = {
@@ -17,27 +31,17 @@ const SDK_CONFIG = {
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
 };
 
-// Middleware CORS (inclut préflight et Authorization)
-const ALLOWED_ORIGINS = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://app.4fly.io",
-  process.env.FRONTEND_URL,
-].filter(Boolean);
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// Middleware
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://app.4fly.io",
+      process.env.FRONTEND_URL,
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -358,22 +362,31 @@ app.get("/login", (req, res) => {
 // Route d'authentification
 app.post("/auth/login", async (req, res) => {
   try {
+    console.log("🔐 [EcoFlight] Tentative de connexion...");
     const { email, password, club_id } = req.body;
 
+    if (!email || !password) {
+      console.log("❌ [EcoFlight] Email ou mot de passe manquant");
+      return res.json({ success: false, error: "Email et mot de passe requis" });
+    }
+
+    console.log(`🔐 [EcoFlight] Connexion pour: ${email}`);
     const sdk = new FourFlySimpleSDK(SDK_CONFIG);
     const loginResult = await sdk.signIn(email, password);
 
     if (!loginResult.success) {
+      console.log(`❌ [EcoFlight] Échec connexion: ${loginResult.error}`);
       return res.json({ success: false, error: loginResult.error });
     }
 
+    console.log(`✅ [EcoFlight] Connexion réussie pour: ${email}`);
     res.json({
       success: true,
       token: loginResult.token,
       user: loginResult.user,
     });
   } catch (error) {
-    console.error("Erreur connexion:", error);
+    console.error("❌ [EcoFlight] Erreur connexion:", error);
     res.json({ success: false, error: error.message });
   }
 });
@@ -620,9 +633,33 @@ app.get("/api/carbon-analysis", authenticateUser, async (req, res) => {
   }
 });
 
-// Démarrage serveur
-app.listen(PORT, () => {
+// Gestion des erreurs non capturées
+process.on('uncaughtException', (error) => {
+  console.error('❌ [EcoFlight] Erreur non capturée:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ [EcoFlight] Promesse rejetée non gérée à', promise, 'raison:', reason);
+  process.exit(1);
+});
+
+// Gestion gracieuse du SIGTERM (Railway)
+process.on('SIGTERM', () => {
+  console.log('⚠️ [EcoFlight] Signal SIGTERM reçu, arrêt gracieux...');
+  process.exit(0);
+});
+
+// Démarrage serveur avec gestion d'erreurs
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌱 EcoFlight Calculateur Carbone démarré sur le port ${PORT}`);
   console.log(`🧮 Mode: Calculs temps réel - Aucune base de données`);
   console.log(`🔐 Authentification: 4Fly standard`);
+  console.log(`✅ [EcoFlight] Serveur prêt et en fonctionnement sur 0.0.0.0:${PORT}`);
+}).on('error', (err) => {
+  console.error(`❌ [EcoFlight] Erreur de démarrage du serveur:`, err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ [EcoFlight] Le port ${PORT} est déjà utilisé`);
+  }
+  process.exit(1);
 });
