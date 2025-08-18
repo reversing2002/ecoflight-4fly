@@ -112,6 +112,20 @@ class FourFlySimpleSDK {
   async isAppInstalled(appId) {
     if (!this.currentClubId) return false;
 
+    // Pour le club par défaut 4Fly, vérifier si l'app autorise les pilotes individuels
+    const defaultClubId = "00000000-0000-0000-0000-000000000001";
+    if (this.currentClubId === defaultClubId) {
+      const { data: catalogApp } = await this.supabase
+        .from("external_apps_catalog")
+        .select("allow_individual_pilots")
+        .eq("app_id", appId)
+        .single();
+      
+      if (catalogApp?.allow_individual_pilots) {
+        return true; // App publique accessible aux pilotes individuels
+      }
+    }
+
     const { data, error } = await this.supabase
       .from("external_app_installations")
       .select("id")

@@ -9,21 +9,10 @@ const cors = require("cors");
 const FourFlySimpleSDK = require("./fourfly-simple-sdk");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Vérification des variables d'environnement critiques
-console.log("🔍 [EcoFlight] Vérification de la configuration...");
-console.log(`📍 PORT: ${PORT} ${process.env.PORT ? '(Railway)' : '(par défaut)'}`);
-console.log(`🔗 SUPABASE_URL: ${process.env.SUPABASE_URL ? 'OK' : 'MANQUANT'}`);
-console.log(`🔑 SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? 'OK' : 'MANQUANT'}`);
-console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-  console.error("❌ [EcoFlight] Variables d'environnement manquantes:");
-  console.error("   - SUPABASE_URL:", process.env.SUPABASE_URL ? "OK" : "MANQUANT");
-  console.error("   - SUPABASE_ANON_KEY:", process.env.SUPABASE_ANON_KEY ? "OK" : "MANQUANT");
-  process.exit(1);
-}
+// Sur Railway/PAAS, PORT est injecté; éviter de forcer un port statique
+const RAW_PORT = process.env.PORT;
+const PORT = (RAW_PORT && Number(RAW_PORT)) || 3001;
+const HOST = process.env.HOST || "0.0.0.0";
 
 // Configuration SDK
 const SDK_CONFIG = {
@@ -31,19 +20,72 @@ const SDK_CONFIG = {
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
 };
 
-// Middleware
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://app.4fly.io",
-      process.env.FRONTEND_URL,
-    ],
-    credentials: true,
-  })
-);
+// Vérification des variables d'environnement
+if (!SDK_CONFIG.supabaseUrl || !SDK_CONFIG.supabaseAnonKey) {
+  console.error("❌ Variables d'environnement manquantes:");
+  console.error("- SUPABASE_URL:", SDK_CONFIG.supabaseUrl ? "✓" : "❌");
+  console.error(
+    "- SUPABASE_ANON_KEY:",
+    SDK_CONFIG.supabaseAnonKey ? "✓" : "❌"
+  );
+  console.log(
+    "⚠️  L'app continuera mais les fonctions d'authentification ne marcheront pas"
+  );
+}
+
+// Configuration CORS simplifiée pour Railway
+const corsOptions = {
+  origin: [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://app.4fly.io",
+    process.env.FRONTEND_URL,
+  ].filter(Boolean),
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+
+// Headers CORS manuels en plus pour Railway
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (
+    origin &&
+    (origin === "https://app.4fly.io" ||
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1") ||
+      origin === process.env.FRONTEND_URL)
+  ) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type,Authorization,Accept"
+  );
+  res.header("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Route racine simple pour health-check
+app.get("/", (_req, res) => {
+  res.status(200).send("EcoFlight OK");
+});
 
 // Endpoint pour recevoir le token 4Fly après connexion
 app.post("/auth/4fly-login", async (req, res) => {
@@ -51,6 +93,14 @@ app.post("/auth/4fly-login", async (req, res) => {
     const { token, club_id, reason } = req.body || {};
     if (!token)
       return res.status(400).json({ success: false, error: "token requis" });
+
+    // Vérifier que le SDK peut être initialisé
+    if (!SDK_CONFIG.supabaseUrl || !SDK_CONFIG.supabaseAnonKey) {
+      return res.status(503).json({
+        success: false,
+        error: "Service temporairement indisponible - configuration manquante",
+      });
+    }
 
     // Log d'arrivée de token (masque la majorité du JWT)
     try {
@@ -249,13 +299,13 @@ app.get("/install", (req, res) => {
             <div class="feature">💰 Estimation des coûts de compensation</div>
             <div class="feature">📈 Statistiques par pilote et par club</div>
             
-            <form action="/complete-install" method="POST">
-                <input type="hidden" name="club_id" value="${club_id}">
-                <input type="hidden" name="return_url" value="${return_url}">
-                <p>
-                    <button type="submit" class="button">Activer EcoFlight</button>
-                </p>
-            </form>
+            <p>
+                <a class="button" href="/complete-install?club_id=${encodeURIComponent(
+                  club_id || ""
+                )}&return_url=${encodeURIComponent(
+    return_url || "https://app.4fly.io"
+  )}">Activer EcoFlight</a>
+            </p>
             
             <p><small>EcoFlight utilise uniquement vos identifiants 4Fly. Aucune donnée stockée.</small></p>
         </div>
@@ -265,31 +315,16 @@ app.get("/install", (req, res) => {
 });
 
 app.post("/complete-install", async (req, res) => {
-  const { club_id, return_url } = req.body;
+  const { return_url } = req.body || {};
+  const target = return_url || "https://app.4fly.io";
+  return res.redirect(302, target);
+});
 
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>EcoFlight Activé</title>
-        <meta charset="utf-8">
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; text-align: center; }
-            .success { color: #4CAF50; font-size: 24px; margin: 20px 0; }
-            .button { background: #4CAF50; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; margin: 10px; }
-        </style>
-    </head>
-    <body>
-        <h1>🎉 EcoFlight Activé !</h1>
-        <div class="success">✅ Calculateur carbone prêt à l'emploi</div>
-        <p>EcoFlight va analyser vos vols 4Fly et calculer leur impact carbone en temps réel.</p>
-        <a href="/login?club_id=${club_id}" class="button">Commencer l'Analyse</a>
-        <a href="${
-          return_url || "https://app.4fly.io"
-        }" class="button">Retour à 4Fly</a>
-    </body>
-    </html>
-  `);
+// GET version to avoid CSP form-action restrictions
+app.get("/complete-install", (req, res) => {
+  const { return_url } = req.query || {};
+  const target = return_url || "https://app.4fly.io";
+  return res.redirect(302, target);
 });
 
 // Page de connexion
@@ -362,31 +397,22 @@ app.get("/login", (req, res) => {
 // Route d'authentification
 app.post("/auth/login", async (req, res) => {
   try {
-    console.log("🔐 [EcoFlight] Tentative de connexion...");
     const { email, password, club_id } = req.body;
 
-    if (!email || !password) {
-      console.log("❌ [EcoFlight] Email ou mot de passe manquant");
-      return res.json({ success: false, error: "Email et mot de passe requis" });
-    }
-
-    console.log(`🔐 [EcoFlight] Connexion pour: ${email}`);
     const sdk = new FourFlySimpleSDK(SDK_CONFIG);
     const loginResult = await sdk.signIn(email, password);
 
     if (!loginResult.success) {
-      console.log(`❌ [EcoFlight] Échec connexion: ${loginResult.error}`);
       return res.json({ success: false, error: loginResult.error });
     }
 
-    console.log(`✅ [EcoFlight] Connexion réussie pour: ${email}`);
     res.json({
       success: true,
       token: loginResult.token,
       user: loginResult.user,
     });
   } catch (error) {
-    console.error("❌ [EcoFlight] Erreur connexion:", error);
+    console.error("Erreur connexion:", error);
     res.json({ success: false, error: error.message });
   }
 });
@@ -552,6 +578,13 @@ const authenticateUser = async (req, res, next) => {
       return res.status(401).json({ error: "Token d'authentification requis" });
     }
 
+    // Vérifier que le SDK peut être initialisé
+    if (!SDK_CONFIG.supabaseUrl || !SDK_CONFIG.supabaseAnonKey) {
+      return res.status(503).json({
+        error: "Service temporairement indisponible - configuration manquante",
+      });
+    }
+
     const sdk = new FourFlySimpleSDK(SDK_CONFIG);
     const result = await sdk.setUserToken(token);
 
@@ -633,33 +666,22 @@ app.get("/api/carbon-analysis", authenticateUser, async (req, res) => {
   }
 });
 
-// Gestion des erreurs non capturées
-process.on('uncaughtException', (error) => {
-  console.error('❌ [EcoFlight] Erreur non capturée:', error);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ [EcoFlight] Promesse rejetée non gérée à', promise, 'raison:', reason);
-  process.exit(1);
-});
-
-// Gestion gracieuse du SIGTERM (Railway)
-process.on('SIGTERM', () => {
-  console.log('⚠️ [EcoFlight] Signal SIGTERM reçu, arrêt gracieux...');
-  process.exit(0);
-});
-
-// Démarrage serveur avec gestion d'erreurs
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌱 EcoFlight Calculateur Carbone démarré sur le port ${PORT}`);
+// Démarrage serveur
+const server = app.listen(PORT, HOST, () => {
+  console.log(`🌱 EcoFlight Calculateur Carbone démarré sur ${HOST}:${PORT}`);
   console.log(`🧮 Mode: Calculs temps réel - Aucune base de données`);
   console.log(`🔐 Authentification: 4Fly standard`);
-  console.log(`✅ [EcoFlight] Serveur prêt et en fonctionnement sur 0.0.0.0:${PORT}`);
-}).on('error', (err) => {
-  console.error(`❌ [EcoFlight] Erreur de démarrage du serveur:`, err);
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ [EcoFlight] Le port ${PORT} est déjà utilisé`);
-  }
-  process.exit(1);
 });
+
+// Arrêt gracieux (SIGTERM/SIGINT) pour éviter un kill brutal en déploiement
+function shutdown(signal) {
+  console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+  server.close(() => {
+    console.log("HTTP server closed");
+    process.exit(0);
+  });
+  // Force exit si ça traîne
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
