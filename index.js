@@ -233,10 +233,12 @@ app.get("/install", (req, res) => {
 // API d'analyse carbone utilisant le nouveau middleware SDK v1.1.0
 app.get("/api/carbon-analysis", app.authMiddleware, async (req, res) => {
   try {
-    // Utiliser les nouvelles méthodes du SDK v1.1.0
-    const flights = await req.sdk.getFlightsAdvanced({ limit: 50 });
+    console.log('🔍 EcoFlight: Starting carbon analysis - club_id:', req.club_id, 'user:', req.user?.email);
+    
+    // Utiliser la méthode getFlights qui retourne directement les données
+    const flightsData = await req.sdk.getFlights({ limit: 50 });
 
-    if (!flights.data) {
+    if (!flightsData || flightsData.length === 0) {
       return res.json({
         success: true,
         user: req.user,
@@ -246,10 +248,17 @@ app.get("/api/carbon-analysis", app.authMiddleware, async (req, res) => {
       });
     }
 
+    // Récupérer les informations des avions pour avoir plus de détails
+    const aircraft = await req.sdk.getAircraft();
+    const aircraftMap = {};
+    aircraft.forEach(a => {
+      aircraftMap[a.id] = a;
+    });
+
     // Calculer l'analyse carbone pour chaque vol
-    const analysisFlights = flights.data.map((flight) => {
+    const analysisFlights = flightsData.map((flight) => {
       // Déterminer le débit conso (l/h): 33 l/h pour 4 places (100LL), 15 l/h pour ULM/2 places (SP98)
-      const aircraftData = flight.aircraft;
+      const aircraftData = aircraftMap[flight.aircraft_id] || {};
       const seats = aircraftData?.capacity || null;
       const type = (aircraftData?.type || "").toUpperCase();
       const isFourSeats = seats && seats >= 4;
@@ -271,7 +280,7 @@ app.get("/api/carbon-analysis", app.authMiddleware, async (req, res) => {
         date: flight.date,
         duration: flight.duration,
         destination: flight.destination,
-        pilot_name: flight.users ? `${flight.users.first_name} ${flight.users.last_name}` : "N/A",
+        pilot_name: req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || "N/A" : "N/A",
         aircraft_name: aircraftData?.name || "Avion",
         aircraft_registration: aircraftData?.registration || "",
         fuel_estimated,
