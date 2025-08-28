@@ -6,7 +6,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const FourFlySimpleSDK = require("./fourfly-simple-sdk");
+const FourFlySDK = require("@4fly/external-apps-sdk");
 
 const app = express();
 // Sur Railway/PAAS, PORT est injecté; éviter de forcer un port statique
@@ -113,8 +113,8 @@ app.post("/auth/4fly-login", async (req, res) => {
       );
     } catch (_) {}
 
-    const sdk = new FourFlySimpleSDK(SDK_CONFIG);
-    const result = await sdk.setUserToken(token);
+    const sdk = new FourFlySDK(SDK_CONFIG);
+    const result = await sdk.setUserToken(token, club_id);
     if (!result.success) {
       return res.status(401).json({ success: false, error: "JWT invalide" });
     }
@@ -399,7 +399,7 @@ app.post("/auth/login", async (req, res) => {
   try {
     const { email, password, club_id } = req.body;
 
-    const sdk = new FourFlySimpleSDK(SDK_CONFIG);
+    const sdk = new FourFlySDK(SDK_CONFIG);
     const loginResult = await sdk.signIn(email, password);
 
     if (!loginResult.success) {
@@ -585,8 +585,11 @@ const authenticateUser = async (req, res, next) => {
       });
     }
 
-    const sdk = new FourFlySimpleSDK(SDK_CONFIG);
-    const result = await sdk.setUserToken(token);
+    // Extraire le club_id des en-têtes
+    const headerClubId = req.headers['x-club-id'];
+
+    const sdk = new FourFlySDK(SDK_CONFIG);
+    const result = await sdk.setUserToken(token, headerClubId);
 
     if (!result.success) {
       return res.status(401).json({ error: "Token invalide" });
