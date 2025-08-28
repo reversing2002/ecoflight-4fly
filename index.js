@@ -94,8 +94,12 @@ app.get("/embed", (req, res) => {
         
         async function initializeApp(token, clubId) {
           try {
+            const headers = { 'Authorization': 'Bearer ' + token };
+            if (clubId) {
+              headers['x-club-id'] = clubId;
+            }
             const resp = await fetch('/api/carbon-analysis', {
-              headers: { 'Authorization': 'Bearer ' + token }
+              headers: headers
             });
             const data = await resp.json();
             
