@@ -1,7 +1,7 @@
 {
   "name": "ecoflight-4fly-sdk-v1.1",
   "version": "2.1.0",
-  "description": "Module de suivi et compensation carbone pour 4Fly - Migré vers SDK v1.1.0",
+  "description": "Module de suivi et compensation carbone pour 4Fly - Migré vers SDK v1.1.2",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -14,7 +14,7 @@
     "npm": ">=8.0.0"
   },
   "dependencies": {
-    "@4fly/external-apps-sdk": "^1.1.0",
+    "@4fly/external-apps-sdk": "^1.1.2",
     "dotenv": "^16.3.1",
     "pg": "^8.11.0"
   },
