@@ -1,10 +1,13 @@
-# 🌱 EcoFlight - Module 4Fly
+# 🌱 EcoFlight - Module de suivi carbone pour [4Fly](https://4fly.io)
 
-Module de suivi et compensation carbone pour l'écosystème d'applications 4Fly.
+> Module open-source de suivi et compensation carbone pour l'écosystème [4Fly](https://4fly.io), la plateforme de gestion pour aéroclubs et écoles de pilotage.
+
+[![4Fly Ecosystem](https://img.shields.io/badge/ecosystem-4Fly-blue)](https://4fly.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## 🎯 Description
 
-EcoFlight permet aux clubs aériens utilisant 4Fly de :
+EcoFlight permet aux clubs aériens utilisant [4Fly](https://4fly.io) de :
 - **Calculer automatiquement** l'empreinte carbone des vols
 - **Suivre les émissions** par pilote et par club
 - **Proposer la compensation** carbone via des partenaires certifiés
@@ -12,20 +15,18 @@ EcoFlight permet aux clubs aériens utilisant 4Fly de :
 
 ## 🏗️ Architecture
 
-Cette application utilise l'architecture **4Fly Simplifiée** avec authentification utilisateur standard :
+Ce module s'intègre nativement avec la plateforme [4Fly](https://4fly.io) via l'authentification utilisateur standard :
 
 ```
 Club Admin → Installe EcoFlight → Membres se connectent avec leurs identifiants 4Fly habituels
 ```
 
-Pas de tokens complexes, pas de configuration compliquée !
-
 ## 🚀 Installation Rapide
 
 ### 1. Cloner et installer
 ```bash
-git clone <this-repo>
-cd ecoflight-4fly-simple
+git clone https://github.com/reversing2002/ecoflight-4fly.git
+cd ecoflight-4fly
 npm install
 ```
 
@@ -48,10 +49,9 @@ npm start
 2. Connecter à [railway.app](https://railway.app)
 3. Déployer depuis le repo GitHub
 4. Configurer les variables d'environnement
-5. L'URL sera générée automatiquement
 
 ### Variables d'environnement requises :
-- `SUPABASE_URL` : URL de l'instance 4Fly Supabase
+- `SUPABASE_URL` : URL de l'instance Supabase 4Fly
 - `SUPABASE_ANON_KEY` : Clé publique Supabase
 - `DATABASE_URL` : Base de données PostgreSQL pour les données EcoFlight
 - `PORT` : Port de l'application (défaut: 3001)
@@ -59,13 +59,13 @@ npm start
 ## 📊 Fonctionnalités
 
 ### Calculs Carbone
-- **Facteurs d'émission** configurables par type de carburant
+- **Facteurs d'émission** configurables par type de carburant (100LL, UL91, Jet-A1, SP95)
 - **Calcul automatique** basé sur la consommation réelle des vols
 - **Historique complet** des émissions par pilote
 
 ### Interface Utilisateur
 - **Dashboard intuitif** avec statistiques visuelles
-- **Connexion 4Fly native** (même identifiants)
+- **Connexion 4Fly native** (même identifiants que la plateforme [4Fly](https://4fly.io))
 - **Rapports exportables** par période
 
 ### Compensation Carbone
@@ -73,9 +73,9 @@ npm start
 - **Calcul des coûts** transparents
 - **Suivi des compensations** effectuées
 
-## 🔗 Intégration 4Fly
+## 🔗 Intégration avec 4Fly
 
-Cette application s'intègre automatiquement avec 4Fly via :
+Ce module s'intègre automatiquement avec la plateforme [4Fly](https://4fly.io) :
 
 ### Données Accessibles
 - ✅ **Vols du club** (date, durée, carburant, destination)
@@ -113,13 +113,6 @@ L'utilisateur garde ses permissions 4Fly :
 - `GET /api/dashboard` - API données dashboard
 - `POST /api/offset` - Compensation carbone
 
-### Base de Données
-EcoFlight utilise sa propre base PostgreSQL pour :
-- `installations` - Clubs ayant installé l'app
-- `carbon_offsets` - Compensations effectuées
-
-Les données des vols viennent directement de 4Fly via l'API.
-
 ## 📈 Métriques
 
 L'application track automatiquement :
@@ -127,25 +120,24 @@ L'application track automatiquement :
 - **Volume de CO₂** calculé et compensé
 - **Adoption** par club et par pilote
 
+## 🌍 Écosystème 4Fly
+
+EcoFlight fait partie de l'écosystème d'applications [4Fly](https://4fly.io), la plateforme tout-en-un pour la gestion des aéroclubs et écoles de pilotage :
+
+- **[4Fly](https://4fly.io)** — Plateforme principale de gestion d'aéroclub (réservations, vols, membres, facturation)
+- **[NOTAM Manager](https://github.com/reversing2002/notam-manager)** — Gestion des NOTAM avec intégration CDM DSNA
+- **EcoFlight** (ce projet) — Suivi et compensation carbone des vols
+
 ## 🤝 Contribution
 
-Cette application est un **exemple** pour l'écosystème 4Fly. 
+Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une issue ou une pull request.
 
-Pour créer votre propre application :
-1. Utiliser le [SDK 4Fly Simplifié](../sdk/fourfly-simple-sdk.js)
-2. Suivre la [documentation développeur](../docs/API_SIMPLE_DEVELOPERS.md)
-3. S'inspirer de cette implémentation
-
-## 📞 Support
-
-- **Documentation** : Voir docs/API_SIMPLE_DEVELOPERS.md
-- **SDK** : sdk/fourfly-simple-sdk.js
-- **Issues** : Utiliser les issues GitHub
+Pour créer votre propre application pour l'écosystème 4Fly, consultez la [documentation développeur](https://4fly.io).
 
 ## 📜 Licence
 
-MIT - Voir LICENSE
+MIT - Voir [LICENSE](LICENSE)
 
 ---
 
-**EcoFlight** - Voler responsable avec 4Fly 🌱✈️
+**EcoFlight** — Voler responsable avec [4Fly](https://4fly.io) 🌱✈️
